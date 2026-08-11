@@ -1,0 +1,1 @@
+import Link from"next/link";export default function NotFound(){return <div className="page text-center"><h1 className="text-4xl font-black">No encontramos esta publicación</h1><p className="muted my-5">Puede estar oculta, cerrada o el enlace puede ser incorrecto.</p><Link className="btn-primary" href="/">Volver al inicio</Link></div>}

@@ -1,0 +1,4 @@
+-- Datos completamente ficticios para desarrollo.
+insert into person_cases(full_name,approximate_age,department,municipality,area,last_seen_place,description,reporter_name) values ('Mariana Ejemplo',34,'Cundinamarca','Municipio Demo','Zona Norte','Parque central ficticio','Caso ficticio para probar la búsqueda.','Persona de prueba');
+insert into community_points(type,name,department,municipality,address,schedule,services,items) values ('COLLECTION','Centro Comunitario Ejemplo','Cundinamarca','Municipio Demo','Calle ficticia 10','08:00–17:00',array['Recepción de donaciones'],array['Agua','Alimentos']);
+insert into aid_requests(department,municipality,area,description,contact_name,contact_phone,urgency,needs) values ('Cundinamarca','Municipio Demo','Vereda Ejemplo','Registro ficticio: se requiere agua para varias familias.','Contacto Ejemplo','3000000000','MEDIA',array['Agua']);
