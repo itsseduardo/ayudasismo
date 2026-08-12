@@ -1,0 +1,2 @@
+import Image from"next/image";import{ImageIcon}from"lucide-react";import type{MediaThumbnail}from"@/lib/types";
+export function ListThumbnail({image,alt}:{image?:MediaThumbnail|null;alt:string}){return <div className="relative size-20 shrink-0 overflow-hidden rounded-xl bg-slate-100 sm:size-24">{image?<Image src={image.url} alt={alt} fill sizes="96px" className="object-cover" unoptimized/>:<div className="grid size-full place-items-center text-slate-400" aria-label="Sin fotografía"><ImageIcon size={28}/></div>}</div>}
