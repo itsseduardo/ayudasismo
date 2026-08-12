@@ -1,27 +1,12 @@
 "use server";
-import { revalidatePath } from "next/cache";
-import { aidSchema, formObject, personSchema, personUpdateSchema, pinSchema, pointSchema, splitList } from "@/lib/validation";
-import { friendlyError, supabase } from "@/lib/supabase";
-import { purgeMedia } from "@/lib/media";
-
-export type ActionState = { ok?: boolean; error?: string; mediaError?: string; publicId?: string; pin?: string; editToken?: string };
-const bad = (e: unknown): ActionState => ({ error: friendlyError(e) });
-
-export async function createPerson(_: ActionState, form: FormData): Promise<ActionState> {
-  try { const v = personSchema.parse(formObject(form)); const { data, error } = await supabase().rpc("create_person_case", { payload: v }); if (error) throw error;revalidatePath("/"); return { ok:true, publicId:data.public_id, pin:data.pin, editToken:data.edit_token }; } catch(e) { return bad(e); }
-}
-export async function addPersonUpdate(_: ActionState, form: FormData): Promise<ActionState> {
-  try { const v = personUpdateSchema.parse(formObject(form)); const { error } = await supabase().rpc("add_person_update", { payload:v }); if(error) throw error; revalidatePath(`/personas/${form.get("public_id")}`); return {ok:true}; } catch(e){ return bad(e); }
-}
-export async function createPoint(_: ActionState, form: FormData): Promise<ActionState> {
-  try { const v = pointSchema.parse(formObject(form)); const payload={...v,services:splitList(v.services),items:splitList(v.items)}; const {data,error}=await supabase().rpc("create_community_point",{payload}); if(error) throw error;revalidatePath("/puntos"); return {ok:true,publicId:data.public_id,pin:data.pin,editToken:data.edit_token}; } catch(e){return bad(e)}
-}
-export async function createAid(_: ActionState, form: FormData): Promise<ActionState> {
-  try { const raw=formObject(form); const v=aidSchema.parse({...raw,needs:form.getAll("needs")}); const {data,error}=await supabase().rpc("create_aid_request",{payload:v}); if(error) throw error;revalidatePath("/ayuda"); return {ok:true,publicId:data.public_id,pin:data.pin,editToken:data.edit_token}; }catch(e){return bad(e)}
-}
-export async function updateWithPin(_: ActionState, form: FormData): Promise<ActionState> {
-  try { const v=pinSchema.parse(formObject(form)); const {error}=await supabase().rpc("update_resource_status",{payload:v}); if(error) throw error; if(v.status==="HIDDEN")await purgeMedia(v.resource_type,v.public_id);revalidatePath("/"); return {ok:true}; } catch{return {error:"PIN o enlace inválido. No se realizó ningún cambio."}}
-}
-export async function communitySignal(_: ActionState, form: FormData): Promise<ActionState> {
-  try { const {error}=await supabase().rpc("add_community_signal",{payload:{resource_type:String(form.get("resource_type")),resource_id:String(form.get("resource_id")),kind:String(form.get("kind")),message:String(form.get("message")||""),idempotency_key:String(form.get("idempotency_key"))}}); if(error) throw error; revalidatePath("/"); return {ok:true}; }catch(e){return bad(e)}
-}
+import{revalidatePath}from"next/cache";import{ZodError}from"zod";
+import{aidSchema,formObject,personSchema,personUpdateSchema,pinSchema,pointSchema,splitList}from"@/lib/validation";import{friendlyError,supabase}from"@/lib/supabase";
+export type ActionState={ok?:boolean;error?:string;mediaError?:string;publicId?:string;pin?:string;editToken?:string};
+const fieldNames:Record<string,string>={full_name:"nombre",department:"departamento",municipality:"municipio",description:"descripción",reporter_name:"nombre del reportante",relationship:"relación",phone:"teléfono",address:"dirección",contact_name:"nombre de contacto",contact_phone:"teléfono",needs:"necesidades",consent:"autorización"};
+function bad(error:unknown,operation:string):ActionState{const candidate=error as{code?:unknown;message?:unknown};console.error("[report-action]",{operation,code:typeof candidate?.code==="string"?candidate.code:error instanceof ZodError?"VALIDATION_ERROR":"ACTION_ERROR",message:typeof candidate?.message==="string"?candidate.message:"Unexpected report error"});if(error instanceof ZodError){const issue=error.issues[0],field=fieldNames[String(issue?.path[0])]??String(issue?.path[0]??"formulario");return{error:`Revisa el campo ${field}: ${issue?.message??"valor inválido"}.`}}return{error:friendlyError(error)}}
+export async function createPerson(_:ActionState,form:FormData):Promise<ActionState>{try{const value=personSchema.parse(formObject(form));const{data,error}=await supabase().rpc("create_person_case",{payload:value});if(error)throw error;revalidatePath("/");return{ok:true,publicId:data.public_id,pin:data.pin,editToken:data.edit_token}}catch(error){return bad(error,"create_person")}}
+export async function addPersonUpdate(_:ActionState,form:FormData):Promise<ActionState>{try{const value=personUpdateSchema.parse(formObject(form));const{error}=await supabase().rpc("add_person_update",{payload:value});if(error)throw error;revalidatePath(`/personas/${form.get("public_id")}`);return{ok:true}}catch(error){return bad(error,"add_person_update")}}
+export async function createPoint(_:ActionState,form:FormData):Promise<ActionState>{try{const value=pointSchema.parse(formObject(form)),payload={...value,services:splitList(value.services),items:splitList(value.items)};const{data,error}=await supabase().rpc("create_community_point",{payload});if(error)throw error;revalidatePath("/puntos");return{ok:true,publicId:data.public_id,pin:data.pin,editToken:data.edit_token}}catch(error){return bad(error,"create_point")}}
+export async function createAid(_:ActionState,form:FormData):Promise<ActionState>{try{const raw=formObject(form),value=aidSchema.parse({...raw,needs:form.getAll("needs")});const{data,error}=await supabase().rpc("create_aid_request",{payload:value});if(error)throw error;revalidatePath("/ayuda");return{ok:true,publicId:data.public_id,pin:data.pin,editToken:data.edit_token}}catch(error){return bad(error,"create_aid")}}
+export async function updateWithPin(_:ActionState,form:FormData):Promise<ActionState>{try{const value=pinSchema.parse(formObject(form));const{error}=await supabase().rpc("update_resource_status",{payload:value});if(error)throw error;if(value.status==="HIDDEN"){const{purgeMedia}=await import("@/lib/media");await purgeMedia(value.resource_type,value.public_id)}revalidatePath("/");return{ok:true}}catch{return{error:"PIN o enlace inválido. No se realizó ningún cambio."}}}
+export async function communitySignal(_:ActionState,form:FormData):Promise<ActionState>{try{const{error}=await supabase().rpc("add_community_signal",{payload:{resource_type:String(form.get("resource_type")),resource_id:String(form.get("resource_id")),kind:String(form.get("kind")),message:String(form.get("message")||""),idempotency_key:String(form.get("idempotency_key"))}});if(error)throw error;revalidatePath("/");return{ok:true}}catch(error){return bad(error,"community_signal")}}
