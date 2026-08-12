@@ -16,7 +16,8 @@ export function isMediaResource(value: unknown): value is MediaResource {
 
 export async function authorizeMedia(resourceType: MediaResource, publicId: string, token: string, recordEvent = true) {
   const { data, error } = await supabaseAdmin().rpc("authorize_media_change", { p_resource_type: resourceType, p_public_id: publicId, p_token: token, p_record_event: recordEvent });
-  if (error || !data) throw new Error(error?.message.includes("rate_limit") ? "RATE_LIMIT" : "INVALID_ACCESS");
+  if(error){logMediaError("authorize",resourceType,error);if(error.message.includes("media_rate_limit"))throw new Error("RATE_LIMIT");if(error.message.includes("invalid_media_access"))throw new Error("INVALID_ACCESS");throw new Error("AUTHORIZATION_SERVICE_ERROR")}
+  if(!data)throw new Error("INVALID_ACCESS");
   return data as string;
 }
 
