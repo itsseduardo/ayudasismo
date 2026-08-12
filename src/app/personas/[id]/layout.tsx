@@ -1,0 +1,2 @@
+import {PublicMediaById} from "@/components/media-gallery";import {MediaManager} from "@/components/media-manager";
+export default async function PersonLayout({children,params}:{children:React.ReactNode;params:Promise<{id:string}>}){const{id}=await params;return <>{children}<div className="grid gap-6 pb-12"><PublicMediaById resourceType="PERSON" publicId={id}/><div className="page !py-0"><MediaManager resourceType="PERSON" publicId={id}/></div></div></>}

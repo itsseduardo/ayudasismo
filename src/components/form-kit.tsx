@@ -1,73 +1,27 @@
 "use client";
 
-import { useActionState, useSyncExternalStore } from "react";
+import Image from "next/image";
+import { useActionState, useState, useSyncExternalStore } from "react";
+import { CheckCircle2, Copy, ImagePlus, LoaderCircle, WifiOff, X } from "lucide-react";
 import type { ActionState } from "@/app/actions";
-import { CheckCircle2, Copy, WifiOff } from "lucide-react";
+import { MAX_IMAGE_BYTES, validateImageInput } from "@/lib/media-validation";
 
-export const input = "w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-100";
-export const label = "grid gap-1.5 text-sm font-semibold text-slate-800";
+export const input="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-100";
+export const label="grid gap-1.5 text-sm font-semibold text-slate-800";
+type MediaResource="PERSON"|"POINT"|"AID";
 
-const subscribeConnection = (notify: () => void) => {
-  addEventListener("online", notify);
-  addEventListener("offline", notify);
-  return () => {
-    removeEventListener("online", notify);
-    removeEventListener("offline", notify);
-  };
-};
+const subscribeConnection=(notify:()=>void)=>{addEventListener("online",notify);addEventListener("offline",notify);return()=>{removeEventListener("online",notify);removeEventListener("offline",notify)}};
+export function ensureIdempotency(form:HTMLFormElement){const field=form.elements.namedItem("idempotency_key");if(field instanceof HTMLInputElement&&!field.value)field.value=crypto.randomUUID()}
 
-export function ensureIdempotency(form: HTMLFormElement) {
-  const field = form.elements.namedItem("idempotency_key");
-  if (field instanceof HTMLInputElement && !field.value) {
-    field.value = crypto.randomUUID();
-  }
-}
+async function compressCreationPhoto(file:File){const header=new Uint8Array(await file.slice(0,16).arrayBuffer());if(!validateImageInput(header,file.size))throw new Error("Usa únicamente JPG, PNG o WebP de hasta 3 MB.");const bitmap=await createImageBitmap(file);const ratio=Math.min(1,1600/Math.max(bitmap.width,bitmap.height));const canvas=document.createElement("canvas");canvas.width=Math.max(1,Math.round(bitmap.width*ratio));canvas.height=Math.max(1,Math.round(bitmap.height*ratio));const context=canvas.getContext("2d");if(!context)throw new Error("No se pudo procesar la fotografía.");context.drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close();const blob=await new Promise<Blob|null>(resolve=>canvas.toBlob(resolve,"image/webp",.76));if(!blob||blob.size>MAX_IMAGE_BYTES)throw new Error("La fotografía sigue superando 3 MB después de comprimirla.");return new File([blob],`${crypto.randomUUID()}.webp`,{type:"image/webp"})}
 
-export function SubmitButton({ children }: { children: React.ReactNode }) {
-  return <button className="btn-primary w-full" type="submit">{children}</button>;
-}
+function CreationPhotos({max,onBusy,onFiles}:{max:number;onBusy:(busy:boolean)=>void;onFiles:(files:File[])=>void}){const[previews,setPreviews]=useState<string[]>([]);const[error,setError]=useState("");const[hasFiles,setHasFiles]=useState(false);async function select(event:React.ChangeEvent<HTMLInputElement>){const field=event.currentTarget;const selected=Array.from(field.files??[]);if(selected.length>max){field.value="";setError(`Puedes seleccionar como máximo ${max} fotografía${max>1?"s":""}.`);return}onBusy(true);setError("");try{const compressed=[];for(const file of selected)compressed.push(await compressCreationPhoto(file));previews.forEach(URL.revokeObjectURL);setPreviews(compressed.map(URL.createObjectURL));setHasFiles(compressed.length>0);onFiles(compressed)}catch(e){field.value="";setPreviews([]);setHasFiles(false);onFiles([]);setError(e instanceof Error?e.message:"Fotografía inválida")}finally{onBusy(false)}}return <section className="wide grid gap-3 rounded-xl border border-slate-200 p-4"><h3 className="font-bold">Fotografías opcionales</h3><p className="muted text-sm">{max===1?"Puedes añadir una fotografía principal.":`Puedes añadir hasta ${max} fotografías.`} Se comprimen antes de crear el reporte.</p><label className="btn-secondary cursor-pointer"><ImagePlus size={18}/> Tomar foto o elegir de la galería<input className="sr-only" type="file" multiple={max>1} accept="image/jpeg,image/png,image/webp" onChange={select}/></label>{previews.length>0&&<div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{previews.map((url,index)=><div className="relative aspect-[4/3] overflow-hidden rounded-xl" key={url}><Image src={url} alt={`Previsualización ${index+1}`} fill className="object-cover" unoptimized/></div>)}</div>}{hasFiles&&<label className="flex items-start gap-3 rounded-xl bg-amber-50 p-3 text-sm"><input required type="checkbox" className="mt-1 size-5"/><span><b>Confirmo que tengo autorización para publicar estas fotografías.</b><br/>No contienen documentos, historias clínicas ni imágenes explícitas de personas heridas o fallecidas.</span></label>}{error&&<p className="error flex gap-2"><X size={18}/>{error}</p>}</section>}
 
-export function ManagedForm({ action, children, draftKey, successPath }: {
-  action: (state: ActionState, form: FormData) => Promise<ActionState>;
-  children: React.ReactNode;
-  draftKey: string;
-  successPath: (id: string, token?: string) => string;
-}) {
-  const [state, formAction, pending] = useActionState(action, {});
-  const online = useSyncExternalStore(subscribeConnection, () => navigator.onLine, () => true);
+export function SubmitButton({children}:{children:React.ReactNode}){return <button className="btn-primary w-full" type="submit">{children}</button>}
 
-  if (state.ok && state.publicId) {
-    return <Credentials state={state} path={successPath(state.publicId, state.editToken)} />;
-  }
+export function ManagedForm({action,children,draftKey,successPath}:{action:(state:ActionState,form:FormData)=>Promise<ActionState>;children:React.ReactNode;draftKey:string;successPath:(id:string,token?:string)=>string}){const[state,formAction,pending]=useActionState(action,{});const[photoBusy,setPhotoBusy]=useState(false);const[photos,setPhotos]=useState<File[]>([]);const online=useSyncExternalStore(subscribeConnection,()=>navigator.onLine,()=>true);const resourceType:MediaResource=draftKey==="draft-person"?"PERSON":draftKey==="draft-point"?"POINT":"AID";if(state.ok&&state.publicId)return <Credentials state={state} path={successPath(state.publicId,state.editToken)} photos={photos} resourceType={resourceType}/>;return <form action={formAction} className="form-card" onSubmitCapture={event=>ensureIdempotency(event.currentTarget)} onInput={event=>{const values=Object.fromEntries(new FormData(event.currentTarget).entries());localStorage.setItem(draftKey,JSON.stringify(values))}}>{!online&&<div className="notice warning"><WifiOff size={18}/> Sin conexión. Tu borrador se guarda en este dispositivo.</div>}<input type="hidden" name="idempotency_key" defaultValue=""/><input className="hidden" tabIndex={-1} autoComplete="off" name="website"/><fieldset disabled={pending||photoBusy} className="grid gap-5">{children}<CreationPhotos max={resourceType==="PERSON"?1:3} onBusy={setPhotoBusy} onFiles={setPhotos}/><SubmitButton>{photoBusy?"Comprimiendo fotografía…":pending?"Guardando reporte…":"Publicar ahora"}</SubmitButton></fieldset>{state.error&&<p className="error" role="alert">{state.error}</p>}</form>}
 
-  return (
-    <form
-      action={formAction}
-      className="form-card"
-      onSubmitCapture={(event) => ensureIdempotency(event.currentTarget)}
-      onInput={(event) => {
-        const values = Object.fromEntries(new FormData(event.currentTarget).entries());
-        localStorage.setItem(draftKey, JSON.stringify(values));
-      }}
-    >
-      {!online && <div className="notice warning"><WifiOff size={18}/> Sin conexión. Tu borrador se guarda en este dispositivo.</div>}
-      <input type="hidden" name="idempotency_key" defaultValue="" />
-      <input className="hidden" tabIndex={-1} autoComplete="off" name="website" />
-      <fieldset disabled={pending} className="grid gap-5">
-        {children}
-        <SubmitButton>{pending ? "Enviando…" : "Publicar ahora"}</SubmitButton>
-      </fieldset>
-      {state.error && <p className="error" role="alert">{state.error}</p>}
-    </form>
-  );
-}
+function PostCreationUpload({resourceType,publicId,token,files}:{resourceType:MediaResource;publicId:string;token:string;files:File[]}){const[status,setStatus]=useState<"idle"|"uploading"|"done"|"error">("idle");const[progress,setProgress]=useState(0);async function start(){setStatus("uploading");for(const[position,file]of files.entries()){const result=await new Promise<boolean>(resolve=>{const form=new FormData();form.set("resourceType",resourceType);form.set("publicId",publicId);form.set("token",token);form.set("position",String(position));form.set("consent","true");form.set("file",file);const xhr=new XMLHttpRequest();xhr.open("POST","/api/media");xhr.upload.onprogress=event=>{if(event.lengthComputable)setProgress(Math.round(((position+event.loaded/event.total)/files.length)*100))};xhr.onload=()=>resolve(xhr.status>=200&&xhr.status<300);xhr.onerror=()=>resolve(false);xhr.send(form)});if(!result){setStatus("error");return}}setProgress(100);setStatus("done")}if(status==="done")return <p className="notice success">Las fotografías se subieron correctamente.</p>;if(status==="error")return <p className="notice warning">El reporte fue guardado, pero la fotografía no pudo subirse. Puedes intentarlo nuevamente desde la administración del reporte.</p>;return <div className="grid gap-2"><button className="btn-primary" type="button" disabled={status==="uploading"} onClick={start}>{status==="uploading"?<LoaderCircle className="animate-spin" size={18}/>:<ImagePlus size={18}/>} {status==="uploading"?`Subiendo ${progress}%`:"Completar subida de fotografías"}</button>{status==="uploading"&&<div className="h-2 overflow-hidden rounded-full bg-slate-200"><div className="h-full bg-teal-700" style={{width:`${progress}%`}}/></div>}</div>}
 
-function Credentials({ state, path }: { state: ActionState; path: string }) {
-  const origin = useSyncExternalStore(() => () => {}, () => location.origin, () => "");
-  const url = `${origin}${path}`;
-  return <section className="form-card border-teal-300"><CheckCircle2 className="text-teal-700" size={36}/><h2 className="text-2xl font-bold">Publicación creada</h2><p>Guarda estos datos ahora. El PIN no volverá a mostrarse.</p><div className="rounded-xl bg-slate-950 p-4 text-white"><span className="text-xs uppercase text-slate-300">PIN privado</span><strong className="block text-3xl tracking-[.3em]">{state.pin}</strong></div><button className="btn-secondary" onClick={() => navigator.clipboard.writeText(url)}><Copy size={18}/> Copiar enlace privado</button><a className="btn-primary" href={path}>Abrir publicación</a></section>;
-}
-
-export function Success({ message = "Información recibida" }: { message?: string }) {
-  return <p className="notice success"><CheckCircle2 size={18}/>{message}</p>;
-}
+function Credentials({state,path,photos,resourceType}:{state:ActionState;path:string;photos:File[];resourceType:MediaResource}){const origin=useSyncExternalStore(()=>()=>{},()=>location.origin,()=>"");const url=`${origin}${path}`;return <section className="form-card border-teal-300"><CheckCircle2 className="text-teal-700" size={36}/><h2 className="text-2xl font-bold">Publicación creada</h2><p>Guarda estos datos ahora. El PIN no volverá a mostrarse.</p><div className="rounded-xl bg-slate-950 p-4 text-white"><span className="text-xs uppercase text-slate-300">PIN privado</span><strong className="block text-3xl tracking-[.3em]">{state.pin}</strong></div>{photos.length>0&&state.publicId&&state.editToken&&<PostCreationUpload resourceType={resourceType} publicId={state.publicId} token={state.editToken} files={photos}/>}<button className="btn-secondary" onClick={()=>navigator.clipboard.writeText(url)}><Copy size={18}/> Copiar enlace privado</button><a className="btn-primary" href={path}>Abrir publicación</a></section>}
+export function Success({message="Información recibida"}:{message?:string}){return <p className="notice success"><CheckCircle2 size={18}/>{message}</p>}

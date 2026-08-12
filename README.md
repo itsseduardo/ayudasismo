@@ -6,11 +6,14 @@ MVP comunitario, móvil y sin cuentas para una emergencia sísmica en Colombia. 
 
 Requisitos: Node.js 20+, npm y un proyecto Supabase.
 
-1. Conserva en `.env.local` (no se versiona) `SUPABASE_URL` y `SUPABASE_PUBLISHABLE_KEY`. También se admiten los nombres `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` por compatibilidad.
+1. Configura en `.env.local` (no se versiona) `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY` y `SUPABASE_STORAGE_BUCKET=report-photos`. La URL debe ser la raíz HTTPS del proyecto, sin `/rest/v1` ni otras rutas. Se admiten `SUPABASE_URL` y `SUPABASE_PUBLISHABLE_KEY` como compatibilidad local.
 2. Pega y ejecuta el archivo completo `supabase/migrations/202608110001_initial_mvp.sql` en SQL Editor. Es idempotente y puede repetirse tras una ejecución parcial. Opcionalmente ejecuta `supabase/seed.sql`, que contiene solo información ficticia.
-3. Instala con `npm install` e inicia con `npm run dev`.
+3. Para habilitar fotografías, ejecuta `supabase/migrations/202608120001_secure_media.sql` y, después, `supabase/migrations/202608120002_align_report_photos.sql`. La segunda migración crea/configura `report-photos` sin borrar referencias del bucket anterior.
+4. Instala con `npm install` e inicia con `npm run dev`.
 
-No hace falta una service-role key: las escrituras públicas pasan por funciones SQL `security definer` limitadas. Las tablas privadas no tienen políticas de lectura pública. Los PIN se guardan con `pgcrypto`/bcrypt y el valor original se muestra una sola vez.
+Las escrituras de formularios pasan por funciones SQL `security definer` limitadas. Las tablas privadas no tienen políticas de lectura pública. Los PIN se guardan con `pgcrypto`/bcrypt y el valor original se muestra una sola vez.
+
+Las fotografías requieren `SUPABASE_SECRET_KEY` exclusivamente en el servidor y `SUPABASE_STORAGE_BUCKET=report-photos`. Nunca uses esas variables con prefijo `NEXT_PUBLIC_`. El navegador envía las imágenes a una Route Handler autenticada; solo el servidor puede escribir o borrar objetos del bucket.
 
 ## Verificación
 

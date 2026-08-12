@@ -1,0 +1,2 @@
+import {PublicMediaById} from "@/components/media-gallery";import {MediaManager} from "@/components/media-manager";
+export default async function PointLayout({children,params}:{children:React.ReactNode;params:Promise<{id:string}>}){const{id}=await params;return <>{children}<div className="grid gap-6 pb-12"><PublicMediaById resourceType="POINT" publicId={id}/><div className="page !py-0"><MediaManager resourceType="POINT" publicId={id}/></div></div></>}
